@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readDir, size } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { sep } from "@tauri-apps/api/path";
+import { join } from "@tauri-apps/api/path";
 import { Button } from "@/components/ui/button";
 import { Upload, Folder, File, Loader2 } from "lucide-react";
 import { FileSystemItem, formatFileSize } from "@/lib/utils";
@@ -55,12 +55,10 @@ function App() {
       const entries = await readDir(selected);
       const newItems: FileSystemItem[] = [];
       
-      // Get platform-specific separator
-      const separator = await sep();
-      
       // Batch size for progressive updates
       const BATCH_SIZE = 50;
       let processedCount = 0;
+      let failedCount = 0;
 
       for (const entry of entries) {
         // Check if scan was aborted
@@ -68,10 +66,14 @@ function App() {
           return;
         }
         
+        // Skip hidden dotfiles (e.g., .DS_Store) to avoid denied scope errors
+        if (entry.name?.startsWith(".")) {
+          continue;
+        }
+        
         try {
-          // Secure path construction using platform separator
-          // Tauri plugins validate paths, but extra safety doesn't hurt
-          const fullPath = `${selected}${separator}${entry.name}`;
+          // Secure path construction using Tauri path API
+          const fullPath = await join(selected, entry.name);
           const itemSize = await size(fullPath);
 
           newItems.push({
@@ -89,8 +91,19 @@ function App() {
             setItems(sortItems([...newItems]));
           }
         } catch (err) {
+          failedCount++;
           console.error(`Error reading ${entry.name}:`, err);
         }
+      }
+
+      // Ensure final state is set after loop completes
+      setItems(sortItems(newItems));
+      
+      // If we scanned entries but could not read any sizes, surface a helpful error
+      if (entries.length > 0 && newItems.length === 0 && failedCount === entries.length) {
+        setError(
+          "Couldn't read item metadata. Check permissions or path construction. If this persists, ensure the app can access your Desktop paths."
+        );
       }
 
       setIsLoading(false);
@@ -186,7 +199,7 @@ function App() {
           </div>
         )}
 
-        {!isLoading && items.length === 0 && selectedFolder && (
+        {!isLoading && !error && items.length === 0 && selectedFolder && (
           <div className="text-center text-muted-foreground py-12">
             No items found in the selected folder
           </div>
