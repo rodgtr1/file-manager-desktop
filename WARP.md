@@ -4,7 +4,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-This is a Tauri v2 desktop application that analyzes folder sizes. It combines a Rust backend (using Tauri) with a React + TypeScript frontend built with Vite. The app allows users to select folders and view all files/folders sorted by size.
+This is a Tauri v2 desktop application that manages disk space by analyzing folder sizes and cleaning up node_modules directories. It combines a Rust backend (using Tauri) with a React + TypeScript frontend built with Vite. The app has two main modes: folder size analysis and node_modules cleanup with bulk deletion capabilities.
 
 ## Architecture
 
@@ -12,7 +12,16 @@ This is a Tauri v2 desktop application that analyzes folder sizes. It combines a
 - **UI Framework**: React 19 with TypeScript
 - **Styling**: Tailwind CSS v4 (using the Vite plugin) + shadcn/ui components
 - **Build Tool**: Vite (configured to run on port 1420)
-- **Main Application**: `src/App.tsx` - handles folder selection, file scanning, and display
+- **Architecture**: Modular hook-based architecture with service layer
+
+#### Code Organization:
+- **Main App**: `src/App.tsx` - clean component using custom hooks
+- **Custom Hooks**:
+  - `src/hooks/useFileScanner.ts` - folder scanning logic and state
+  - `src/hooks/useNodeModulesManager.ts` - deletion and selection management
+  - `src/hooks/useAppSettings.ts` - UI settings (zoom controls)
+- **Service Layer**: `src/services/fileService.ts` - all Tauri file operations
+- **UI Components**: `src/components/` - reusable components (ScanModeToggle, FileList, etc.)
 - **Utilities**: `src/lib/utils.ts` - contains `FileSystemItem` interface and formatting helpers
 
 ### Backend (Rust + Tauri)
@@ -20,7 +29,7 @@ This is a Tauri v2 desktop application that analyzes folder sizes. It combines a
 - **Entry Point**: `src-tauri/src/lib.rs` - initializes plugins and command handlers
 - **Plugins Used**:
   - `tauri-plugin-dialog` - for folder selection dialogs
-  - `tauri-plugin-fs` - for file system access (reading directories, getting file sizes)
+  - `tauri-plugin-fs` - for file system access (reading directories, getting file sizes, recursive deletion)
   - `tauri-plugin-opener` - for revealing items in system file manager
 - **Configuration**: `src-tauri/tauri.conf.json`
 
@@ -28,6 +37,16 @@ This is a Tauri v2 desktop application that analyzes folder sizes. It combines a
 - Frontend uses `@tauri-apps/api` and plugin packages to invoke Rust functionality
 - File system operations happen on the Rust side for security and performance
 - Progressive UI updates as files are scanned (items update in real-time)
+- Custom hooks manage complex state and business logic
+- Service layer abstracts all Tauri API calls for better testability
+
+### Features
+- **Folder Size Analysis**: Scan any directory to view files/folders sorted by size
+- **Node Modules Cleanup**: Recursively find and delete node_modules folders
+- **Bulk Operations**: Multi-select with "Select All" functionality
+- **Real-time Progress**: Live updates during scanning and deletion
+- **Safety Features**: Confirmation dialogs and detailed progress feedback
+- **Performance**: Batched updates and recursion limits prevent UI freezing
 
 ## Development Commands
 
@@ -75,6 +94,33 @@ Compiles TypeScript and builds the frontend (outputs to `dist/`).
 
 ### Tauri Permissions
 Permissions are managed in `src-tauri/capabilities/`. The current app uses dialog, fs, and opener plugins which require appropriate permissions.
+
+## Working with the Modular Architecture
+
+### Adding New Features
+1. **Business Logic**: Create or extend custom hooks in `src/hooks/`
+2. **UI Components**: Add reusable components in `src/components/`
+3. **File Operations**: Extend `src/services/fileService.ts`
+4. **Integration**: Update `src/App.tsx` to use new hooks/components
+
+### Custom Hooks Pattern
+Each hook follows this pattern:
+- State management with `useState`
+- Callback functions with `useCallback` for performance
+- Cleanup with `useEffect` when needed
+- Clear return object separating state and actions
+
+### Testing Strategy
+- **Hooks**: Test with `@testing-library/react-hooks`
+- **Components**: Test with `@testing-library/react`
+- **Services**: Mock Tauri APIs for unit tests
+- **Integration**: Test full user flows
+
+### Performance Considerations
+- Batched UI updates (every 5 items) prevent render thrashing
+- `useCallback` on all event handlers to prevent re-renders
+- Abort controllers for cancelling long-running operations
+- Recursion depth limits (20 levels) prevent stack overflow
 
 ## Component Management
 
