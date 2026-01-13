@@ -51,7 +51,7 @@ npm install
 npm run tauri dev
 
 # Build for production
-npm run tauri build
+npm run tauri:build
 ```
 
 ### IDE Setup
